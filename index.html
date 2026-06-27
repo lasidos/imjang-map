@@ -133,8 +133,8 @@
 
         function renderMarkers() {
           if (!map) { log('renderMarkers: no map'); return; }
-          // iframe이 탭 전환으로 늦게 사이즈를 받으면 오버레이 위치가 오계산됨 → 재계산(center 변경 없음)
-          try { map.relayout(); } catch (e) {}
+          // 주의: 여기서 map.relayout()을 호출하면 안 됨 — relayout은 center를 복원하지 않아
+          // setComplexes가 반복될 때마다 지도가 점점 밀려남(드리프트). relayout은 fullRefresh에서만.
           clearOverlays();
           complexes.forEach(function (c) {
             var isSel = c.id === selectedId || c.selected;
