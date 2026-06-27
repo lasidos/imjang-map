@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>임장노트 지도</title>
+    <style>
+      html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #e9eef3; overflow: hidden; }
+      #map { position: absolute; inset: 0; }
+      /* 카카오 타일만 톤다운 — 마커(CustomOverlay)는 영향 없음 */
+      #map > div:first-child { filter: grayscale(0.4) saturate(0.5) brightness(1.05) hue-rotate(-12deg) contrast(0.96); }
+      @keyframes imjangPulse { 0% { transform: scale(0.9); opacity: 0.55; } 70% { transform: scale(2.4); opacity: 0; } 100% { opacity: 0; } }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+    <script>
+      // 임장노트 iOS용 Kakao 지도 iframe — 부모(앱)와 postMessage로 통신.
+      // iOS WKWebView는 capacitor:// origin이라 Kakao 도메인검증에 걸리므로,
+      // 이 페이지를 등록된 https origin(Supabase Storage)에서 로드해 우회한다.
+      (function () {
+        'use strict';
+        var qs = new URLSearchParams(location.search);
+        var APPKEY = qs.get('appkey') || '';
+        var PARENT_ORIGIN = '*'; // 부모는 capacitor://localhost — 고정 origin 보장 불가하므로 * (데이터 민감도 낮음)
+
+        function post(msg) { try { parent.postMessage(JSON.stringify(msg), PARENT_ORIGIN); } catch (e) {} }
+        function log(m) { post({ type: 'log', m: String(m) }); }
+
+        // ---- 포맷 (src/lib/format.ts wonShort 포팅) ----
+        function wonShort(man) {
+          var eok = man / 10000;
+          if (eok >= 1) { var v = Math.round(eok * 10) / 10; return (v % 1 === 0 ? v.toFixed(0) : v.toFixed(1)) + '억'; }
+          return man.toLocaleString() + '만';
+        }
+
+        var ACCENT = '#3182F6', NEAR = '#FFB200';
+        var TYPE_COLOR = { '아파트': '#3182F6', '오피스텔': '#22C55E', '빌라': '#F59E0B', '다가구': '#B69FCF' };
+
+        // ---- 마커 DOM (src/lib/mapMarkers.ts makeComplexMarkerEl 포팅) ----
+        function complexPrices(c) {
+          return (c.areas || []).map(function (a) {
+            var last = a.trend && a.trend.length ? a.trend[a.trend.length - 1] : null;
+            return (last && (last.last != null ? last.last : last.max)) != null
+              ? (last.last != null ? last.last : last.max) : a.price;
+          }).filter(function (p) { return p > 0; });
+        }
+        function makeComplexMarkerEl(c, opts) {
+          opts = opts || {};
+          var selected = !!opts.selected, hasNote = !!opts.hasNote, planned = !!opts.planned, order = opts.order;
+          var wrap = document.createElement('div');
+          wrap.style.cssText = 'cursor:pointer;display:flex;justify-content:center;position:relative;' + (planned && !selected ? 'opacity:.78;' : '');
+          var typeColor = TYPE_COLOR[c.type] || '#A0A8B5';
+          var bg = selected ? ACCENT : '#FFFFFF';
+          var color = selected ? '#FFFFFF' : '#191F28';
+          var subColor = selected ? 'rgba(255,255,255,.85)' : '#4E5968';
+          var border = hasNote ? NEAR : (selected ? ACCENT : typeColor);
+          if (order != null) {
+            var badge = document.createElement('div');
+            badge.style.cssText = 'position:absolute;top:-8px;left:-8px;min-width:20px;height:20px;border-radius:10px;background:' + ACCENT + ';color:#fff;font-weight:800;font-size:11px;display:flex;align-items:center;justify-content:center;padding:0 5px;border:1.5px solid #fff;box-shadow:0 2px 6px rgba(17,24,39,.3);z-index:2';
+            badge.textContent = String(order); wrap.appendChild(badge);
+          }
+          if (planned && !selected) {
+            var pb = document.createElement('div');
+            pb.style.cssText = 'position:absolute;top:-8px;right:-8px;height:18px;border-radius:9px;background:#4E5968;color:#fff;font-weight:800;font-size:10px;display:flex;align-items:center;justify-content:center;padding:0 6px;border:1.5px solid #fff;box-shadow:0 2px 6px rgba(17,24,39,.3);z-index:2;white-space:nowrap';
+            pb.textContent = '담김'; wrap.appendChild(pb);
+          }
+          var pill = document.createElement('div');
+          pill.style.cssText = 'position:relative;background:' + bg + ';color:' + color + ';border:1.5px solid ' + border + ';border-radius:14px;padding:6px 10px;display:flex;flex-direction:column;align-items:center;gap:1px;box-shadow:0 4px 12px rgba(17,24,39,.22);min-width:60px;max-width:160px';
+          var nameLine = document.createElement('div');
+          nameLine.style.cssText = 'color:' + subColor + ';font-weight:700;font-size:10.5px;letter-spacing:-.01em;line-height:1.15;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap';
+          nameLine.textContent = (hasNote ? '★ ' : '') + c.name;
+          var priceLine = document.createElement('div');
+          priceLine.style.cssText = 'color:' + color + ';font-weight:900;font-size:13px;line-height:1.1;letter-spacing:-.02em;font-feature-settings:"tnum"';
+          var prices = complexPrices(c);
+          if (prices.length) {
+            var min = Math.min.apply(null, prices), max = Math.max.apply(null, prices);
+            priceLine.textContent = min === max ? wonShort(min) : (wonShort(min) + '~' + wonShort(max));
+          } else { priceLine.textContent = '거래없음'; priceLine.style.fontSize = '11px'; priceLine.style.color = subColor; }
+          pill.appendChild(nameLine); pill.appendChild(priceLine);
+          if (c.households) {
+            var subLine = document.createElement('div');
+            subLine.style.cssText = 'color:' + subColor + ';font-weight:600;font-size:10px;line-height:1.1;font-feature-settings:"tnum"';
+            subLine.textContent = c.households.toLocaleString() + '세대'; pill.appendChild(subLine);
+          }
+          var tail = document.createElement('div');
+          tail.style.cssText = 'position:absolute;left:50%;bottom:-6px;transform:translateX(-50%);width:0;height:0;border:6px solid transparent;border-top-color:' + bg + ';border-bottom:0';
+          pill.appendChild(tail); wrap.appendChild(pill);
+          return wrap;
+        }
+        function makeMeMarkerEl() {
+          var wrap = document.createElement('div');
+          wrap.style.cssText = 'position:relative;width:18px;height:18px;transform:translate(-50%,-50%)';
+          var ring = document.createElement('div');
+          ring.style.cssText = 'position:absolute;inset:0;border-radius:50%;background:rgba(49,130,246,.18);animation:imjangPulse 1.8s ease-out infinite';
+          var dot = document.createElement('div');
+          dot.style.cssText = 'position:absolute;inset:3px;border-radius:50%;background:' + ACCENT + ';box-shadow:0 0 0 3px #fff,0 2px 6px rgba(0,0,0,.25)';
+          wrap.appendChild(ring); wrap.appendChild(dot); return wrap;
+        }
+        function makeLegLabelEl(text) {
+          var el = document.createElement('div');
+          el.style.cssText = 'background:rgba(255,255,255,.95);border:1.5px solid #3182F6;border-radius:10px;padding:2px 7px;font-size:10.5px;font-weight:800;color:#1456C7;box-shadow:0 2px 6px rgba(17,24,39,.18);white-space:nowrap;pointer-events:none';
+          el.textContent = text; return el;
+        }
+        function haversine(a, b) {
+          var R = 6371000, dLat = (b.lat - a.lat) * Math.PI / 180, dLng = (b.lng - a.lng) * Math.PI / 180;
+          var la1 = a.lat * Math.PI / 180, la2 = b.lat * Math.PI / 180;
+          var x = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(la1) * Math.cos(la2) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+          return 2 * R * Math.asin(Math.sqrt(x));
+        }
+        function fmtM(m) { return m >= 1000 ? (m / 1000).toFixed(1) + 'km' : Math.round(m) + 'm'; }
+
+        // ---- 상태 ----
+        var kakao, map;
+        var complexes = [];
+        var overlays = [];     // 단지 마커 오버레이
+        var meOverlay = null;
+        var routeLine = null;
+        var legLabels = [];
+        var selectedId = null;
+        var lastCenter = null;
+        var moveTimer = null;
+
+        function clearOverlays() { overlays.forEach(function (o) { o.setMap(null); }); overlays = []; }
+        function clearRoute() {
+          if (routeLine) { routeLine.setMap(null); routeLine = null; }
+          legLabels.forEach(function (o) { o.setMap(null); }); legLabels = [];
+        }
+
+        function renderMarkers() {
+          if (!map) return;
+          clearOverlays();
+          complexes.forEach(function (c) {
+            var isSel = c.id === selectedId || c.selected;
+            var el = makeComplexMarkerEl(c, { hasNote: c.hasNote, selected: isSel, planned: c.planned, order: c.order });
+            el.addEventListener('click', function (e) {
+              e.stopPropagation();
+              // 픽셀 클러스터: 36px 이내 겹침 단지 모음
+              var proj = map.getProjection();
+              var PICK = 36, overlapping = [c.id];
+              if (proj) {
+                var cp = proj.pointFromCoords(new kakao.maps.LatLng(c.lat, c.lng));
+                overlapping = complexes.filter(function (o) {
+                  if (o.id === c.id) return true;
+                  var op = proj.pointFromCoords(new kakao.maps.LatLng(o.lat, o.lng));
+                  return Math.hypot(op.x - cp.x, op.y - cp.y) <= PICK;
+                }).map(function (o) { return o.id; });
+              }
+              if (overlapping.length > 1) post({ type: 'cluster', ids: overlapping });
+              else post({ type: 'markerClick', id: c.id });
+            });
+            var ov = new kakao.maps.CustomOverlay({
+              position: new kakao.maps.LatLng(c.lat, c.lng),
+              content: el, yAnchor: 1, xAnchor: 0.5, zIndex: isSel ? 7 : 5, clickable: true,
+            });
+            ov.setMap(map);
+            overlays.push(ov);
+          });
+        }
+
+        function renderRoute(points) {
+          clearRoute();
+          if (!map || !points || points.length < 2) return;
+          routeLine = new kakao.maps.Polyline({
+            path: points.map(function (p) { return new kakao.maps.LatLng(p.lat, p.lng); }),
+            strokeWeight: 3, strokeColor: '#3182F6', strokeOpacity: 0.85, strokeStyle: 'solid',
+          });
+          routeLine.setMap(map);
+          for (var i = 0; i < points.length - 1; i++) {
+            var a = points[i], b = points[i + 1];
+            var mid = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 };
+            var ov = new kakao.maps.CustomOverlay({
+              position: new kakao.maps.LatLng(mid.lat, mid.lng),
+              content: makeLegLabelEl(fmtM(haversine(a, b))), yAnchor: 0.5, xAnchor: 0.5, zIndex: 6,
+            });
+            ov.setMap(map); legLabels.push(ov);
+          }
+        }
+
+        function setMe(pos) {
+          if (meOverlay) { meOverlay.setMap(null); meOverlay = null; }
+          if (!pos || !map) return;
+          meOverlay = new kakao.maps.CustomOverlay({
+            position: new kakao.maps.LatLng(pos.lat, pos.lng),
+            content: makeMeMarkerEl(), yAnchor: 0.5, xAnchor: 0.5, zIndex: 4,
+          });
+          meOverlay.setMap(map);
+        }
+
+        // ---- 부모 메시지 처리 ----
+        window.addEventListener('message', function (ev) {
+          var msg; try { msg = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data; } catch (e) { return; }
+          if (!msg || !msg.type) return;
+          switch (msg.type) {
+            case 'setComplexes': complexes = msg.complexes || []; renderMarkers(); break;
+            case 'select': selectedId = msg.id || null; renderMarkers(); break;
+            case 'setCenter':
+              if (map) { map.setCenter(new kakao.maps.LatLng(msg.lat, msg.lng)); if (msg.level) map.setLevel(msg.level); }
+              break;
+            case 'panTo': if (map) map.panTo(new kakao.maps.LatLng(msg.lat, msg.lng)); break;
+            case 'setMe': setMe(msg.pos || null); break;
+            case 'pickerRoute': renderRoute(msg.points || []); break;
+            case 'relayout': if (map) map.relayout(); break;
+          }
+        });
+
+        // ---- Kakao SDK 로드 + 초기화 ----
+        function init() {
+          var s = document.createElement('script');
+          s.src = 'https://dapi.kakao.com/v2/maps/sdk.js?appkey=' + APPKEY + '&autoload=false&libraries=services';
+          s.onload = function () {
+            kakao = window.kakao;
+            if (!kakao || !kakao.maps || !kakao.maps.load) { post({ type: 'error', m: 'sdk-load-failed' }); return; }
+            kakao.maps.load(function () {
+              var c = new kakao.maps.LatLng(37.5665, 126.978);
+              map = new kakao.maps.Map(document.getElementById('map'), { center: c, level: 3 });
+              lastCenter = { lat: 37.5665, lng: 126.978 };
+              kakao.maps.event.addListener(map, 'click', function () { post({ type: 'mapClick' }); });
+              kakao.maps.event.addListener(map, 'dragend', function () {
+                var ctr = map.getCenter(), lat = ctr.getLat(), lng = ctr.getLng();
+                if (lastCenter) {
+                  var dy = (lat - lastCenter.lat) * 110540;
+                  var dx = (lng - lastCenter.lng) * 111320 * Math.cos(lat * Math.PI / 180);
+                  if (Math.hypot(dx, dy) < 50) return;
+                }
+                lastCenter = { lat: lat, lng: lng };
+                if (moveTimer) clearTimeout(moveTimer);
+                moveTimer = setTimeout(function () { post({ type: 'moveEnd', lat: lat, lng: lng }); }, 400);
+              });
+              post({ type: 'ready' });
+            });
+          };
+          s.onerror = function () { post({ type: 'error', m: 'sdk-script-error' }); };
+          document.head.appendChild(s);
+        }
+        if (!APPKEY) { post({ type: 'error', m: 'no-appkey' }); }
+        else init();
+      })();
+    </script>
+  </body>
+</html>
