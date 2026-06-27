@@ -72,10 +72,11 @@
           nameLine.textContent = (hasNote ? '★ ' : '') + c.name;
           var priceLine = document.createElement('div');
           priceLine.style.cssText = 'color:' + color + ';font-weight:900;font-size:13px;line-height:1.1;letter-spacing:-.02em;font-feature-settings:"tnum"';
-          var prices = complexPrices(c);
-          if (prices.length) {
-            var min = Math.min.apply(null, prices), max = Math.max.apply(null, prices);
-            priceLine.textContent = min === max ? wonShort(min) : (wonShort(min) + '~' + wonShort(max));
+          // 부모가 priceMin/priceMax를 미리 계산해 보냄(payload 경량). 없으면 areas에서 계산(폴백).
+          var pmin = c.priceMin, pmax = c.priceMax;
+          if (pmin == null) { var ps = complexPrices(c); if (ps.length) { pmin = Math.min.apply(null, ps); pmax = Math.max.apply(null, ps); } }
+          if (pmin != null) {
+            priceLine.textContent = pmin === pmax ? wonShort(pmin) : (wonShort(pmin) + '~' + wonShort(pmax));
           } else { priceLine.textContent = '거래없음'; priceLine.style.fontSize = '11px'; priceLine.style.color = subColor; }
           pill.appendChild(nameLine); pill.appendChild(priceLine);
           if (c.households) {
@@ -118,6 +119,7 @@
         var routeLine = null;
         var legLabels = [];
         var selectedId = null;
+        var pickerMode = false;
         var lastCenter = null;
         var moveTimer = null;
 
@@ -135,6 +137,8 @@
             var el = makeComplexMarkerEl(c, { hasNote: c.hasNote, selected: isSel, planned: c.planned, order: c.order });
             el.addEventListener('click', function (e) {
               e.stopPropagation();
+              // picker 모드: 클러스터링 없이 클릭 단지 바로 토글
+              if (pickerMode) { post({ type: 'markerClick', id: c.id }); return; }
               // 픽셀 클러스터: 36px 이내 겹침 단지 모음
               var proj = map.getProjection();
               var PICK = 36, overlapping = [c.id];
@@ -192,6 +196,7 @@
           var msg; try { msg = typeof ev.data === 'string' ? JSON.parse(ev.data) : ev.data; } catch (e) { return; }
           if (!msg || !msg.type) return;
           switch (msg.type) {
+            case 'setMode': pickerMode = !!msg.picker; break;
             case 'setComplexes': complexes = msg.complexes || []; renderMarkers(); break;
             case 'select': selectedId = msg.id || null; renderMarkers(); break;
             case 'setCenter':
