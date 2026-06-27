@@ -131,6 +131,8 @@
 
         function renderMarkers() {
           if (!map) { log('renderMarkers: no map'); return; }
+          // iframe이 탭 전환으로 늦게 사이즈를 받으면 오버레이 위치가 오계산됨 → 재계산(center 변경 없음)
+          try { map.relayout(); } catch (e) {}
           clearOverlays();
           complexes.forEach(function (c) {
             var isSel = c.id === selectedId || c.selected;
@@ -191,8 +193,6 @@
             content: makeMeMarkerEl(), yAnchor: 0.5, xAnchor: 0.5, zIndex: 9,
           });
           meOverlay.setMap(map);
-          // iframe이 탭 전환으로 늦게 사이즈를 받으면 오버레이가 안 보일 수 있어 방어적 relayout
-          try { map.relayout(); map.setCenter(new kakao.maps.LatLng(pos.lat, pos.lng)); } catch (e) {}
         }
 
         // ---- 부모 메시지 처리 ----
@@ -226,6 +226,9 @@
               map = new kakao.maps.Map(document.getElementById('map'), { center: c, level: 3 });
               lastCenter = { lat: 37.5665, lng: 126.978 };
               kakao.maps.event.addListener(map, 'click', function () { post({ type: 'mapClick' }); });
+              // 사용자가 지도를 드래그하기 시작하면 즉시 알림(작은 드래그도 포함) → 부모가 자동 내위치 center 중단
+              kakao.maps.event.addListener(map, 'dragstart', function () { post({ type: 'userMoved' }); });
+              kakao.maps.event.addListener(map, 'zoom_start', function () { post({ type: 'userMoved' }); });
               kakao.maps.event.addListener(map, 'dragend', function () {
                 var ctr = map.getCenter(), lat = ctr.getLat(), lng = ctr.getLng();
                 if (lastCenter) {
@@ -239,6 +242,8 @@
               });
               log('map ready (kakao loaded)');
               post({ type: 'ready' });
+              // 탭 전환으로 컨테이너 사이즈가 늦게 잡히는 경우 대비: 잠시 후 1회 relayout (center 유지)
+              setTimeout(function () { try { var c = map.getCenter(); map.relayout(); map.setCenter(c); } catch (e) {} }, 400);
             });
           };
           s.onerror = function () { post({ type: 'error', m: 'sdk-script-error' }); };
