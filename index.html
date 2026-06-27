@@ -122,6 +122,8 @@
         var pickerMode = false;
         var lastCenter = null;
         var moveTimer = null;
+        var lastMePos = null;     // 마지막 내위치 (사이즈 변경 시 재렌더용)
+        var lastRoutePts = null;  // 마지막 picker 경로
 
         function clearOverlays() { overlays.forEach(function (o) { o.setMap(null); }); overlays = []; }
         function clearRoute() {
@@ -176,6 +178,7 @@
         }
 
         function renderRoute(points) {
+          lastRoutePts = (points && points.length) ? points : null;
           clearRoute();
           if (!map || !points || points.length < 2) return;
           routeLine = new kakao.maps.Polyline({
@@ -195,7 +198,7 @@
         }
 
         function setMe(pos) {
-          log('setMe ' + (pos ? pos.lat + ',' + pos.lng : 'null') + ' map=' + !!map);
+          lastMePos = pos || null;
           if (meOverlay) { meOverlay.setMap(null); meOverlay = null; }
           if (!pos || !map) return;
           meOverlay = new kakao.maps.CustomOverlay({
@@ -203,6 +206,24 @@
             content: makeMeMarkerEl(), yAnchor: 0.5, xAnchor: 0.5, zIndex: 9,
           });
           meOverlay.setMap(map);
+        }
+
+        // 사이즈가 0→실제로 바뀐 뒤(탭 전환) 호출: relayout + 전체 재렌더.
+        // 0x0에서 만든 오버레이는 (0,0)에 박히므로 사이즈 확보 후 다시 그려야 건물 위에 정확히 옴.
+        var lastSize = '';
+        function fullRefresh() {
+          try {
+            var el = document.getElementById('map');
+            if (!map || !el || el.offsetWidth === 0 || el.offsetHeight === 0) return;
+            var sz = el.offsetWidth + 'x' + el.offsetHeight;
+            var c = map.getCenter();
+            map.relayout();
+            map.setCenter(c);
+            renderMarkers();
+            if (lastMePos) setMe(lastMePos);
+            if (lastRoutePts) renderRoute(lastRoutePts);
+            if (sz !== lastSize) { log('fullRefresh @ ' + sz); lastSize = sz; }
+          } catch (e) {}
         }
 
         // ---- 부모 메시지 처리 ----
@@ -220,7 +241,7 @@
             case 'panTo': if (map) map.panTo(new kakao.maps.LatLng(msg.lat, msg.lng)); break;
             case 'setMe': setMe(msg.pos || null); break;
             case 'pickerRoute': renderRoute(msg.points || []); break;
-            case 'relayout': if (map) map.relayout(); break;
+            case 'relayout': fullRefresh(); break;
           }
         });
 
@@ -255,12 +276,9 @@
               // ★ 핵심: 컨테이너 사이즈가 늦게/변하면 Kakao 오버레이가 타일과 어긋남(마커가 건물에서 벗어남).
               //   web처럼 사이즈 변경마다 relayout으로 재동기화 (center 유지).
               var relayoutT = null;
-              function doRelayout() {
-                try { var c = map.getCenter(); map.relayout(); map.setCenter(c); } catch (e) {}
-              }
               function scheduleRelayout() {
                 if (relayoutT) clearTimeout(relayoutT);
-                relayoutT = setTimeout(doRelayout, 60);
+                relayoutT = setTimeout(fullRefresh, 60);
               }
               try {
                 var el = document.getElementById('map');
@@ -269,7 +287,7 @@
               window.addEventListener('resize', scheduleRelayout);
               window.addEventListener('orientationchange', scheduleRelayout);
               // 초기 사이즈 settling 대비 타이머 몇 번
-              [150, 500, 1200].forEach(function (t) { setTimeout(doRelayout, t); });
+              [150, 500, 1200].forEach(function (t) { setTimeout(fullRefresh, t); });
             });
           };
           s.onerror = function () { post({ type: 'error', m: 'sdk-script-error' }); };
