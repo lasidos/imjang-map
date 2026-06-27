@@ -242,8 +242,24 @@
               });
               log('map ready (kakao loaded)');
               post({ type: 'ready' });
-              // 탭 전환으로 컨테이너 사이즈가 늦게 잡히는 경우 대비: 잠시 후 1회 relayout (center 유지)
-              setTimeout(function () { try { var c = map.getCenter(); map.relayout(); map.setCenter(c); } catch (e) {} }, 400);
+              // ★ 핵심: 컨테이너 사이즈가 늦게/변하면 Kakao 오버레이가 타일과 어긋남(마커가 건물에서 벗어남).
+              //   web처럼 사이즈 변경마다 relayout으로 재동기화 (center 유지).
+              var relayoutT = null;
+              function doRelayout() {
+                try { var c = map.getCenter(); map.relayout(); map.setCenter(c); } catch (e) {}
+              }
+              function scheduleRelayout() {
+                if (relayoutT) clearTimeout(relayoutT);
+                relayoutT = setTimeout(doRelayout, 60);
+              }
+              try {
+                var el = document.getElementById('map');
+                if (window.ResizeObserver) { new ResizeObserver(scheduleRelayout).observe(el); }
+              } catch (e) {}
+              window.addEventListener('resize', scheduleRelayout);
+              window.addEventListener('orientationchange', scheduleRelayout);
+              // 초기 사이즈 settling 대비 타이머 몇 번
+              [150, 500, 1200].forEach(function (t) { setTimeout(doRelayout, t); });
             });
           };
           s.onerror = function () { post({ type: 'error', m: 'sdk-script-error' }); };
