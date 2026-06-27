@@ -197,9 +197,10 @@
           if (!msg || !msg.type) return;
           switch (msg.type) {
             case 'setMode': pickerMode = !!msg.picker; break;
-            case 'setComplexes': complexes = msg.complexes || []; renderMarkers(); break;
+            case 'setComplexes': complexes = msg.complexes || []; log('setComplexes n=' + complexes.length); renderMarkers(); break;
             case 'select': selectedId = msg.id || null; renderMarkers(); break;
             case 'setCenter':
+              log('setCenter ' + msg.lat + ',' + msg.lng);
               if (map) { map.setCenter(new kakao.maps.LatLng(msg.lat, msg.lng)); if (msg.level) map.setLevel(msg.level); }
               break;
             case 'panTo': if (map) map.panTo(new kakao.maps.LatLng(msg.lat, msg.lng)); break;
@@ -232,6 +233,7 @@
                 if (moveTimer) clearTimeout(moveTimer);
                 moveTimer = setTimeout(function () { post({ type: 'moveEnd', lat: lat, lng: lng }); }, 400);
               });
+              log('map ready (kakao loaded)');
               post({ type: 'ready' });
             });
           };
