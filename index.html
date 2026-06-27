@@ -130,7 +130,7 @@
         }
 
         function renderMarkers() {
-          if (!map) return;
+          if (!map) { log('renderMarkers: no map'); return; }
           clearOverlays();
           complexes.forEach(function (c) {
             var isSel = c.id === selectedId || c.selected;
@@ -160,6 +160,7 @@
             ov.setMap(map);
             overlays.push(ov);
           });
+          log('renderMarkers done, overlays=' + overlays.length);
         }
 
         function renderRoute(points) {
@@ -182,6 +183,7 @@
         }
 
         function setMe(pos) {
+          log('setMe ' + (pos ? pos.lat + ',' + pos.lng : 'null') + ' map=' + !!map);
           if (meOverlay) { meOverlay.setMap(null); meOverlay = null; }
           if (!pos || !map) return;
           meOverlay = new kakao.maps.CustomOverlay({
