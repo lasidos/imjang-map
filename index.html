@@ -91,11 +91,11 @@
         }
         function makeMeMarkerEl() {
           var wrap = document.createElement('div');
-          wrap.style.cssText = 'position:relative;width:18px;height:18px;transform:translate(-50%,-50%)';
+          wrap.style.cssText = 'position:relative;width:24px;height:24px';
           var ring = document.createElement('div');
-          ring.style.cssText = 'position:absolute;inset:0;border-radius:50%;background:rgba(49,130,246,.18);animation:imjangPulse 1.8s ease-out infinite';
+          ring.style.cssText = 'position:absolute;inset:0;border-radius:50%;background:rgba(49,130,246,.22);animation:imjangPulse 1.8s ease-out infinite';
           var dot = document.createElement('div');
-          dot.style.cssText = 'position:absolute;inset:3px;border-radius:50%;background:' + ACCENT + ';box-shadow:0 0 0 3px #fff,0 2px 6px rgba(0,0,0,.25)';
+          dot.style.cssText = 'position:absolute;inset:5px;border-radius:50%;background:' + ACCENT + ';box-shadow:0 0 0 3px #fff,0 2px 8px rgba(0,0,0,.35)';
           wrap.appendChild(ring); wrap.appendChild(dot); return wrap;
         }
         function makeLegLabelEl(text) {
@@ -188,9 +188,11 @@
           if (!pos || !map) return;
           meOverlay = new kakao.maps.CustomOverlay({
             position: new kakao.maps.LatLng(pos.lat, pos.lng),
-            content: makeMeMarkerEl(), yAnchor: 0.5, xAnchor: 0.5, zIndex: 4,
+            content: makeMeMarkerEl(), yAnchor: 0.5, xAnchor: 0.5, zIndex: 9,
           });
           meOverlay.setMap(map);
+          // iframe이 탭 전환으로 늦게 사이즈를 받으면 오버레이가 안 보일 수 있어 방어적 relayout
+          try { map.relayout(); map.setCenter(new kakao.maps.LatLng(pos.lat, pos.lng)); } catch (e) {}
         }
 
         // ---- 부모 메시지 처리 ----
