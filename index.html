@@ -11,6 +11,29 @@
       href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800;900&display=swap"
       rel="stylesheet"
     />
+    <script>
+      // 앱 업데이트 즉시 반영 — WKWebView/HTTP의 index.html 10분 캐시 우회.
+      // 배포된 version.json(no-store)과 현재 로드된 엔트리 해시를 비교해, 다르면
+      // ?v=<hash> 캐시버스트로 새 index를 강제 로드한다. 해시 청크는 불변이라 그대로 캐시.
+      (function () {
+        try {
+          fetch('version.json?ts=' + Date.now(), { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+              if (!j || !j.build) return;
+              var el = document.querySelector('script[src*="/assets/index-"]');
+              var m = el && el.src.match(/index-([A-Za-z0-9_-]+)\.js/);
+              var cur = m ? m[1] : '';
+              if (!cur || cur === j.build) return;              // 이미 최신
+              var u = new URL(location.href);
+              if (u.searchParams.get('v') === j.build) return;  // 이 버전으로 이미 리로드함 — 루프 방지
+              u.searchParams.set('v', j.build);
+              location.replace(u.toString());
+            })
+            .catch(function () {});
+        } catch (e) {}
+      })();
+    </script>
     <script type="module" crossorigin src="/imjang-map/assets/index-B8sOTFc6.js"></script>
     <link rel="stylesheet" crossorigin href="/imjang-map/assets/index-B3uUzqHt.css">
   </head>
