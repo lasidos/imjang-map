@@ -50,33 +50,44 @@
       else q = (sessionStorage.getItem('nv_q') || '').trim();
     } catch (_) {}
     var target = 'https://m.land.naver.com/search/result/' + encodeURIComponent(q);
-    var retry = document.getElementById('retry');
-    if (retry) {
-      if (q) retry.setAttribute('href', target);
-      else retry.style.display = 'none';   // 단지명을 모르면 빈 링크 대신 숨김
-    }
 
     function showHub(){
+      // '이 단지 다시 보기' 링크는 최신 q(쿼리 유실 시 sessionStorage 폴백)로 매번 갱신.
+      // 단지명을 알 수 없으면 빈 링크 대신 숨긴다.
+      var qq = q;
+      try { if (!qq) qq = (sessionStorage.getItem('nv_q') || '').trim(); } catch (_) {}
+      var retry = document.getElementById('retry');
+      if (retry) {
+        if (qq) { retry.setAttribute('href', 'https://m.land.naver.com/search/result/' + encodeURIComponent(qq)); retry.style.display = ''; }
+        else retry.style.display = 'none';
+      }
       var l = document.getElementById('loading'); if (l) l.style.display = 'none';
       var h = document.getElementById('hub'); if (h) h.style.display = 'block';
     }
 
-    // 뒤로가기(bfcache 복원 또는 back_forward 내비게이션)로 이 페이지에 되돌아온 경우:
-    // 다시 네이버로 리다이렉트하면 무한 왕복이 되므로, 검색 허브를 보여준다.
-    window.addEventListener('pageshow', function(e){
-      var navType = '';
-      try {
-        var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
-        navType = nav && nav.type ? nav.type : '';
-      } catch (_) {}
-      if (e.persisted || navType === 'back_forward') {
-        showHub();
-      } else if (q) {
-        location.href = target;   // 최초 진입: 네이버 매물결과로 자동 이동(히스토리 1개 생성 → 뒤로가기 활성화)
+    // 리다이렉트 트랩 방지 + 뒤로가기 복귀 지점 확정.
+    // 로드 중 location.href 이동은 브라우저가 히스토리를 '치환'해 이 페이지가 사라진다(뒤로가기 불가).
+    // 그래서 히스토리를 결정론적으로 구성한다:
+    //   1) replaceState 로 현재 엔트리 URL에 '#go' 마커를 심는다 → 이게 '뒤로가기 복귀 지점'.
+    //   2) pushState 로 여분 엔트리(마커 없음)를 하나 쌓는다.
+    //   3) location.replace(네이버) 로 여분 엔트리를 네이버로 '치환'한다.
+    //   결과 히스토리: [ naver.html?q=X#go , 네이버결과 ]  → 뒤로가기하면 '#go' 엔트리로 복귀.
+    // 복귀 엔트리에서 다시 run()이 돌면 location.hash === '#go' 이므로 재이동 없이 허브를 띄운다.
+    // (해시는 히스토리 엔트리에 그대로 복원되는 History API 표준 → 실 Safari에서 확정적으로 동작)
+    function run(e){
+      if (location.hash === '#go' || (e && e.persisted)) { showHub(); return; }  // 복귀 → 허브
+      if (q) {
+        var base = location.pathname + location.search;
+        try {
+          history.replaceState(null, '', base + '#go');  // 복귀 지점(마커)
+          history.pushState(null, '', base);             // 리다이렉트용 여분 엔트리
+        } catch (_) {}
+        location.replace(target);        // 여분 엔트리를 네이버로 치환(자동 이동) → 뒤로가기 시 '#go'로 복귀
       } else {
         showHub();
       }
-    });
+    }
+    window.addEventListener('pageshow', run);
   })();
 </script>
 </body>
