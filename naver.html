@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>네이버 부동산</title>
+<style>
+  :root{ --ink:#191F28; --ink-3:#8B95A1; --line:#E5E8EB; --surface-2:#F6F8FA; --green:#03C75A; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; height:100%; }
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;
+    color:var(--ink); background:#fff;
+    display:flex; align-items:center; justify-content:center; text-align:center;
+    padding:24px calc(24px + env(safe-area-inset-right)) 24px calc(24px + env(safe-area-inset-left));
+  }
+  .spinner{ width:34px; height:34px; border:3px solid var(--line); border-top-color:var(--green);
+    border-radius:50%; animation:spin .8s linear infinite; margin:0 auto 16px; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  .muted{ color:var(--ink-3); font-size:14px; }
+  #hub{ display:none; width:100%; max-width:360px; }
+  #hub h1{ font-size:19px; font-weight:800; margin:4px 0 6px; }
+  #hub .sub{ color:var(--ink-3); font-size:13.5px; line-height:1.5; margin:0 0 22px; }
+  .btn{ display:flex; align-items:center; justify-content:center; width:100%; height:52px;
+    border-radius:14px; font-weight:800; font-size:15.5px; text-decoration:none; margin-top:12px; }
+  .btn.primary{ background:var(--green); color:#fff; }
+  .btn.ghost{ background:var(--surface-2); color:var(--ink); }
+</style>
+</head>
+<body>
+  <div id="loading">
+    <div class="spinner"></div>
+    <div class="muted">네이버 부동산으로 이동 중…</div>
+  </div>
+
+  <div id="hub">
+    <h1>네이버 부동산에서 검색</h1>
+    <p class="sub">신축 등 일부 단지는 이름으로 바로 검색되지 않을 수 있어요.<br>아래에서 단지·지역을 직접 검색해 보세요.</p>
+    <a id="search" class="btn primary" href="https://fin.land.naver.com/search">단지·지역 검색하기 ›</a>
+    <a id="retry" class="btn ghost" href="#">이 단지 다시 보기</a>
+  </div>
+
+<script>
+  (function(){
+    var p = new URLSearchParams(location.search);
+    var q = (p.get('q') || '').trim();
+    // 뒤로가기 시 URL 쿼리가 유실될 수 있어 최초 진입 때 단지명을 보존한다.
+    try {
+      if (q) sessionStorage.setItem('nv_q', q);
+      else q = (sessionStorage.getItem('nv_q') || '').trim();
+    } catch (_) {}
+    var target = 'https://m.land.naver.com/search/result/' + encodeURIComponent(q);
+    var retry = document.getElementById('retry');
+    if (retry) {
+      if (q) retry.setAttribute('href', target);
+      else retry.style.display = 'none';   // 단지명을 모르면 빈 링크 대신 숨김
+    }
+
+    function showHub(){
+      var l = document.getElementById('loading'); if (l) l.style.display = 'none';
+      var h = document.getElementById('hub'); if (h) h.style.display = 'block';
+    }
+
+    // 뒤로가기(bfcache 복원 또는 back_forward 내비게이션)로 이 페이지에 되돌아온 경우:
+    // 다시 네이버로 리다이렉트하면 무한 왕복이 되므로, 검색 허브를 보여준다.
+    window.addEventListener('pageshow', function(e){
+      var navType = '';
+      try {
+        var nav = performance.getEntriesByType && performance.getEntriesByType('navigation')[0];
+        navType = nav && nav.type ? nav.type : '';
+      } catch (_) {}
+      if (e.persisted || navType === 'back_forward') {
+        showHub();
+      } else if (q) {
+        location.href = target;   // 최초 진입: 네이버 매물결과로 자동 이동(히스토리 1개 생성 → 뒤로가기 활성화)
+      } else {
+        showHub();
+      }
+    });
+  })();
+</script>
+</body>
+</html>
