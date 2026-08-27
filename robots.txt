@@ -1,0 +1,12 @@
+# 단지노트 — https://danjinote.co.kr
+User-agent: *
+Allow: /
+
+# 앱 내부용 페이지(검색결과에 노출될 이유가 없음)
+Disallow: /kakao-embed.html
+Disallow: /naver.html
+Disallow: /complexCoords.json
+Disallow: /version.json
+Disallow: /assets/
+
+Sitemap: https://danjinote.co.kr/sitemap.xml
