@@ -1,0 +1,14 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["96Q6452X7H.kr.publicad.imjangnote"],
+        "components": [
+          { "/": "/privacy.html", "exclude": true, "comment": "개인정보처리방침은 브라우저에서 열려야 함(스토어 심사가 이 URL을 연다)" },
+          { "/": "/account-deletion.html", "exclude": true, "comment": "계정 삭제 안내도 브라우저에서" },
+          { "/": "/*", "comment": "단지노트 웹앱 및 초대링크(?invite=)" }
+        ]
+      }
+    ]
+  }
+}
