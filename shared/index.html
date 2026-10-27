@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
+    <meta name="theme-color" content="#3182F6" />
+    <title>단지노트 — 아파트 실거래가 조회와 임장 기록</title>
+    <meta name="description" content="국토교통부 실거래가로 아파트·오피스텔 시세를 지도에서 확인하고, 임장 기록을 친구와 함께 남기는 앱. 단지노트." />
+    <link rel="canonical" href="https://danjinote.co.kr/" />
+    <!-- 검색엔진 사이트 소유확인. deploy.sh가 매 배포마다 레포를 비우므로 소스에 둬야 검증이 유지된다. -->
+    <meta name="naver-site-verification" content="300f92876e256e6c8144253d680c304c116a6072" />
+    <meta name="robots" content="noindex,nofollow" />
+    <!-- 파비콘/홈화면 아이콘 -->
+    <link rel="icon" type="image/png" sizes="32x32" href="../favicon-32.png" />
+    <link rel="apple-touch-icon" href="../apple-touch-icon.png" />
+    <!-- Open Graph — 카카오톡/메신저 링크 미리보기(초대 링크 썸네일) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="단지노트" />
+    <meta property="og:locale" content="ko_KR" />
+    <meta property="og:title" content="단지노트 — 아파트 실거래가 조회와 임장 기록" />
+    <meta property="og:description" content="국토교통부 실거래가로 아파트·오피스텔 시세를 지도에서 확인하고, 임장 기록을 친구와 함께 남기세요." />
+    <meta property="og:image" content="https://danjinote.co.kr/og-image.png" />
+    <meta property="og:image:width" content="1024" />
+    <meta property="og:image:height" content="1024" />
+    <meta property="og:url" content="https://danjinote.co.kr/" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="단지노트 — 아파트 실거래가 조회와 임장 기록" />
+    <meta name="twitter:description" content="국토교통부 실거래가로 아파트·오피스텔 시세를 지도에서 확인하고, 임장 기록을 친구와 함께." />
+    <meta name="twitter:image" content="https://danjinote.co.kr/og-image.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700;800;900&display=swap"
+      rel="stylesheet"
+    />
+    <script>
+      // 앱 업데이트 즉시 반영 — WKWebView/HTTP의 index.html 10분 캐시 우회.
+      // 배포된 version.json(no-store)과 현재 로드된 엔트리 해시를 비교해, 다르면
+      // ?v=<hash> 캐시버스트로 새 index를 강제 로드한다. 해시 청크는 불변이라 그대로 캐시.
+      (function () {
+        try {
+          fetch('version.json?ts=' + Date.now(), { cache: 'no-store' })
+            .then(function (r) { return r.ok ? r.json() : null; })
+            .then(function (j) {
+              if (!j || !j.build) return;
+              var el = document.querySelector('script[src*="/assets/index-"]');
+              var m = el && el.src.match(/index-([A-Za-z0-9_-]+)\.js/);
+              var cur = m ? m[1] : '';
+              if (!cur || cur === j.build) return;              // 이미 최신
+              var u = new URL(location.href);
+              if (u.searchParams.get('v') === j.build) return;  // 이 버전으로 이미 리로드함 — 루프 방지
+              u.searchParams.set('v', j.build);
+              location.replace(u.toString());
+            })
+            .catch(function () {});
+        } catch (e) {}
+      })();
+    </script>
+    <!-- 부팅 워치독.
+         앱은 매 실행 웹을 원격 로드한다(capacitor.config.ts server.url). 그래서 엔트리 번들이
+         한 번이라도 실행되지 않으면 — 캐시된 옛 index.html이 이미 삭제된 자산을 가리키거나,
+         실행 순간 네트워크가 아직 안 붙었거나 — 화면이 검은 채로 굳는다.
+         이때는 전역 오류 핸들러도 그 번들 안에 있어 로그조차 남지 않는다(장애가 눈에 안 보인다).
+         위 version.json 검사가 1차 복구지만 fetch가 실패하면 조용히 포기하므로, 최후 안전망으로
+         "일정 시간 안에 화면이 그려졌는가"를 직접 본다. 렌더 여부는 배포 경로·네트워크와 무관한
+         유일한 판정 기준이다. 무한 새로고침을 막으려 세션당 1회로 제한한다. -->
+    <script>
+      (function () {
+        var GRACE_MS = 6000;      // 느린 네트워크에서 정상 부팅되는 시간까지 기다린다
+        var COOLDOWN_MS = 60000;  // 이 시간 안에 이미 시도했으면 다시 하지 않는다(재부팅 루프 방지)
+        var KEY = 'boot_stall_reload_at';
+        setTimeout(function () {
+          var root = document.getElementById('root');
+          if (root && root.childElementCount > 0) return; // 정상 렌더됨
+          var last = 0;
+          try {
+            last = Number(sessionStorage.getItem(KEY) || 0);
+            if (Date.now() - last < COOLDOWN_MS) return;
+            sessionStorage.setItem(KEY, String(Date.now()));
+          } catch (e) {
+            return; // 저장소를 못 쓰면 판단 근거가 없어 새로고침하지 않는다
+          }
+          // 이 경로는 번들이 안 돌아 텔레메트리가 0이 된다 → 여기서 직접 남긴다.
+          // sendBeacon은 쓸 수 없다: JSON 본문은 CORS 사전요청을 유발하는데 beacon은 사전요청을
+          // 못 보내 그대로 폐기된다. keepalive fetch는 사전요청이 가능하고 페이지 이탈 후에도 완료된다.
+          try {
+            var cid = null;
+            try { cid = localStorage.getItem('dn_cid'); } catch (e2) {}
+            fetch('https://danjinote-api.tripvoice.co.kr/api/log', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              keepalive: true,
+              body: JSON.stringify({
+                event: 'boot_stall',
+                clientId: cid,
+                detail: { href: location.href, online: navigator.onLine }
+              })
+            }).catch(function () {});
+          } catch (e3) {}
+          var u = new URL(location.href);
+          u.searchParams.set('r', String(Date.now())); // 캐시 우회로 새 index.html을 받는다
+          location.replace(u.toString());
+        }, GRACE_MS);
+      })();
+    </script>
+    <!-- 구조화 데이터. CSR SPA라 크롤러가 본문을 못 읽으므로, 서비스 정체성은 여기서 명시한다.
+         시세 예측·투자 권유로 읽힐 표현은 넣지 않는다(실거래가 '조회' 도구). -->
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@graph": [
+          {
+            "@type": "WebSite",
+            "@id": "https://danjinote.co.kr/#website",
+            "url": "https://danjinote.co.kr/",
+            "name": "단지노트",
+            "description": "국토교통부 실거래가 기반 아파트·오피스텔 시세 조회와 임장 기록 서비스",
+            "inLanguage": "ko-KR"
+          },
+          {
+            "@type": "MobileApplication",
+            "@id": "https://danjinote.co.kr/#app",
+            "name": "단지노트",
+            "applicationCategory": "LifestyleApplication",
+            "operatingSystem": "iOS, Android",
+            "url": "https://danjinote.co.kr/",
+            "image": "https://danjinote.co.kr/og-image.png",
+            "description": "국토교통부 실거래가로 아파트·오피스텔 시세를 지도에서 확인하고, 임장 기록을 친구와 공유하는 앱입니다.",
+            "inLanguage": "ko-KR",
+            "offers": { "@type": "Offer", "price": "0", "priceCurrency": "KRW" },
+            "sameAs": [
+              "https://apps.apple.com/app/id6784940363",
+              "https://play.google.com/store/apps/details?id=kr.publicad.imjangnote"
+            ]
+          }
+        ]
+      }
+    </script>
+    <script type="module" crossorigin src="../assets/index-D19xKj0P.js"></script>
+    <link rel="stylesheet" crossorigin href="../assets/index-7SIWnN4_.css">
+  </head>
+  <body>
+    <div id="stage"><div id="root"></div></div>
+    <!-- JS를 실행하지 않는 크롤러(네이버 Yeti 등)가 읽을 본문. 화면에는 영향 없다.
+         앱과 동일한 사실만 적는다 — 과장하면 그게 곧 표시광고 문제가 된다. -->
+    <noscript>
+      <h1>단지노트 — 아파트 실거래가 조회와 임장 기록</h1>
+      <p>
+        단지노트는 국토교통부 실거래가(RTMS) 자료를 지도와 목록에서 확인하고,
+        직접 다녀온 임장 기록을 남겨 친구와 함께 볼 수 있는 앱입니다.
+      </p>
+      <ul>
+        <li>아파트·오피스텔·빌라·다가구 실거래가를 지도에서 확인</li>
+        <li>단지별 평형·전세/월세 거래 내역 조회</li>
+        <li>임장 기록 작성과 친구 공유</li>
+        <li>여러 단지의 가격 비교</li>
+      </ul>
+      <p>자료: 국토교통부 실거래가. 단지노트는 실거래가를 보여주는 조회 도구이며, 투자를 권유하지 않습니다.</p>
+      <p>
+        앱 내려받기:
+        <a href="https://apps.apple.com/app/id6784940363">App Store</a> ·
+        <a href="https://play.google.com/store/apps/details?id=kr.publicad.imjangnote">Google Play</a>
+      </p>
+      <p><a href="privacy.html">개인정보처리방침</a> · <a href="account-deletion.html">계정 삭제 안내</a></p>
+    </noscript>
+  </body>
+</html>
