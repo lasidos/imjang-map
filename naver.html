@@ -49,7 +49,20 @@
       if (q) sessionStorage.setItem('nv_q', q);
       else q = (sessionStorage.getItem('nv_q') || '').trim();
     } catch (_) {}
-    var target = 'https://m.land.naver.com/search/result/' + encodeURIComponent(q);
+    var target = 'https://fin.land.naver.com/search?query=' + encodeURIComponent(q);
+
+    var id = (p.get('id') || '').trim();
+    var API = 'https://danjinote-api.tripvoice.co.kr';
+    function resolveTarget(){
+      if (!id) return Promise.resolve(target);
+      var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+      var timer = setTimeout(function(){ if (ctl) ctl.abort(); }, 6000);
+      return fetch(API + '/api/complexes/' + encodeURIComponent(id) + '/naver-link', ctl ? { signal: ctl.signal } : {})
+        .then(function(r){ return r.json(); })
+        .then(function(j){ return (j && j.no) ? 'https://fin.land.naver.com/complexes/' + j.no : target; })
+        .catch(function(){ return target; })
+        .then(function(t){ clearTimeout(timer); return t; });
+    }
 
     function showHub(){
       // '이 단지 다시 보기' 링크는 최신 q(쿼리 유실 시 sessionStorage 폴백)로 매번 갱신.
@@ -58,7 +71,7 @@
       try { if (!qq) qq = (sessionStorage.getItem('nv_q') || '').trim(); } catch (_) {}
       var retry = document.getElementById('retry');
       if (retry) {
-        if (qq) { retry.setAttribute('href', 'https://m.land.naver.com/search/result/' + encodeURIComponent(qq)); retry.style.display = ''; }
+        if (qq) { retry.setAttribute('href', 'https://fin.land.naver.com/search?query=' + encodeURIComponent(qq)); retry.style.display = ''; }
         else retry.style.display = 'none';
       }
       var l = document.getElementById('loading'); if (l) l.style.display = 'none';
@@ -82,7 +95,8 @@
           history.replaceState(null, '', base + '#go');  // 복귀 지점(마커)
           history.pushState(null, '', base);             // 리다이렉트용 여분 엔트리
         } catch (_) {}
-        location.replace(target);        // 여분 엔트리를 네이버로 치환(자동 이동) → 뒤로가기 시 '#go'로 복귀
+        // 단지번호를 알면 단지 카드로 바로, 모르면(실패·미등록) 검색 주소로 폴백.
+        resolveTarget().then(function(t){ location.replace(t); });
       } else {
         showHub();
       }
